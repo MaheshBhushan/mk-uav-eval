@@ -36,3 +36,4 @@ packages = ["src/mkuav"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: runs model inference"]
