@@ -125,6 +125,7 @@ def run_icg(img_dir, mask_dir, csv_path):
         img = cv2.imread(str(img_path))
         mask = cv2.imread(str(mask_path), cv2.IMREAD_UNCHANGED)
         if img is None or mask is None:
+            flag("unreadable", stem)
             continue
         if img.shape[:2] != mask.shape[:2]:
             flag("dim_mismatch", stem)
@@ -148,6 +149,7 @@ def run_icg(img_dir, mask_dir, csv_path):
         "files_affected": {k: sorted(v) for k, v in files_affected.items()},
         "class_hist": dict(class_hist),
         "num_classes": num_classes,
+        "num_files": len(img_stems & mask_stems),
     }
 
 
@@ -270,7 +272,7 @@ def main(args) -> int:
 
     if args.dataset in ("icg", "all"):
         icg_result = run_icg("data/icg/images", "data/icg/masks", "data/icg/class_dict_seg.csv")
-        _print_table("ICG", icg_result, len(icg_result.get("class_hist", {})))
+        _print_table("ICG", icg_result, icg_result["num_files"])
         top5 = sorted(icg_result["class_hist"].items(), key=lambda kv: -kv[1])[:5]
         print("top-5 class pixel histogram:", top5)
         report["icg"] = icg_result

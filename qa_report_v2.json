@@ -33,7 +33,8 @@
         "class_23"
       ]
     },
-    "num_classes": 24
+    "num_classes": 24,
+    "num_files": 400
   },
   "visdrone": {
     "class_hist": {
