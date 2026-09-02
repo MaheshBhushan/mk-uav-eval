@@ -35,6 +35,12 @@ def load(model_path: str, backend: str, sess_options=None):
             providers = [("OpenVINOExecutionProvider", {"device_type": "GPU"}), "CPUExecutionProvider"]
 
         session = ort.InferenceSession(model_path, sess_options=sess_options, providers=providers)
+        wanted = providers[0][0] if isinstance(providers[0], tuple) else providers[0]
+        if session.get_providers()[0] != wanted:
+            # ORT silently drops providers that are not compiled in and falls back to CPU;
+            # a benchmark row for a backend that did not actually run would be a lie.
+            raise RuntimeError(f"{wanted} not available in this onnxruntime build "
+                               f"(got {session.get_providers()})")
         return ("ort", session)
     raise ValueError(f"unknown backend {backend!r}, expected one of {BACKENDS}")
 
