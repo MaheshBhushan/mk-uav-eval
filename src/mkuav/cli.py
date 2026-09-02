@@ -25,6 +25,16 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_parser.add_argument("--model", default="models/yolov8n.onnx")
             cmd_parser.add_argument("--conf", type=float, default=0.25)
             cmd_parser.add_argument("--iou", type=float, default=0.5)
+        if name == "segment":
+            cmd_parser.add_argument("image")
+            cmd_parser.add_argument("--backend", choices=("cv2", "ort"), default="cv2")
+            cmd_parser.add_argument("--model", default="models/seg_unet_r18.onnx")
+            cmd_parser.add_argument("--out", default="mask.png")
+        if name == "eval-seg":
+            cmd_parser.add_argument("--model", default="models/seg_unet_r18.onnx")
+            cmd_parser.add_argument("--backend", choices=("cv2", "ort"), default="ort")
+            cmd_parser.add_argument("--subset", type=int, default=0)
+            cmd_parser.add_argument("--json", dest="json_path", default=None)
         if name == "bench":
             cmd_parser.add_argument("--model", default="models/yolov8n.onnx")
             cmd_parser.add_argument("--image", default="/var/tmp/bus.jpg")
@@ -75,6 +85,14 @@ def main(argv=None) -> int:
         from mkuav import detect
 
         return detect.main(args)
+    if args.cmd == "segment":
+        from mkuav import segment
+
+        return segment.main(args)
+    if args.cmd == "eval-seg":
+        from mkuav import metrics_seg
+
+        return metrics_seg.main(args)
     if args.cmd == "bench":
         from mkuav import bench
 
