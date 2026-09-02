@@ -8,7 +8,6 @@ __pycache__/
 !/data/.gitignore
 /models/*
 !/models/*.dvc
-!/models/yolov8n.onnx
 !/models/.gitignore
 !/models/seg_classes.json
 !/models/seg_train_log.json

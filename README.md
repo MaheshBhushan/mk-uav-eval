@@ -1,51 +1,91 @@
-# mk-uav-eval
+<h1 align="center">mk-uav-eval</h1>
+<p align="center">An OpenCV evaluation harness for versioned UAV datasets: annotation QA, OpenCV DNN and onnxruntime inference, metrics cross-checked against pycocotools and torchmetrics, latency, robustness, and a report published by CI on every push.</p>
 
-[![ci](https://github.com/MaheshBhushan/mk-uav-eval/actions/workflows/ci.yml/badge.svg)](https://github.com/MaheshBhushan/mk-uav-eval/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/MaheshBhushan/mk-uav-eval/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/MaheshBhushan/mk-uav-eval/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/github/license/MaheshBhushan/mk-uav-eval"></a>
+  <img alt="last commit" src="https://img.shields.io/github/last-commit/MaheshBhushan/mk-uav-eval">
+  <img alt="python" src="https://img.shields.io/badge/python-3.12-blue">
+</p>
+<p align="center">
+  <a href="https://github.com/MaheshBhushan/mk-uav-eval/actions/workflows/ci.yml">Latest report (CI artifact)</a> ·
+  <a href="https://github.com/MaheshBhushan/mk-uav-eval/releases/tag/models-v1">Models</a> ·
+  <a href="https://www.kaggle.com/code/kodurimahesh/mk-uav-seg-finetune">Training kernel</a> ·
+  <a href="#results">Results</a> ·
+  <a href="#quickstart">Quickstart</a>
+</p>
 
-An OpenCV evaluation harness for versioned UAV datasets. It validates annotations,
-runs ONNX models through OpenCV DNN and onnxruntime, scores them against
-pycocotools-verified metrics, measures latency and robustness, and publishes a
-Markdown + JSON report from CI on every push.
+![YOLOv8n detections on a VisDrone frame through OpenCV DNN, and UNet segmentation on a held-out ICG image](assets/hero.jpg)
 
-Every number below was produced by `mkuav report` on the current `main`.
+## Overview
+
+Evaluating a vision model on drone imagery has three failure modes that a training
+script never shows you: the annotations are wrong, the metric implementation is
+wrong, or the number you quote was measured on a different backend than the one
+you deploy. This repo attacks all three. It validates VisDrone boxes and ICG
+semantic masks with named QA rules and stores the raw and cleaned datasets as two
+DVC versions. It runs the same ONNX file through OpenCV DNN, onnxruntime and the
+onnxruntime OpenVINO provider with one shared pre- and post-processing path, so
+the forward pass is the only variable. Its own mAP and mIoU implementations are
+asserted equal to pycocotools and torchmetrics in the test suite.
+
+The harness is the deliverable. The models are pretrained COCO YOLOv8n and a
+small UNet trained from scratch, and their absolute scores are low on purpose.
+
+## Quickstart
+
+```bash
+git clone https://github.com/MaheshBhushan/mk-uav-eval.git && cd mk-uav-eval
+uv sync --extra cpu --extra dev                              # or --extra openvino instead of cpu
+gh release download models-v1 -p "*.onnx" -D models/         # 12 MB YOLOv8n + 31 MB UNet
+cp -r data/ci_subset/. data/                                 # 50 VisDrone + 20 ICG images, committed
+uv run pytest -q                                             # 15 tests, ~20 s
+uv run mkuav report --subset 50 --backend ort --out report.md --json metrics.json
+```
+
+That is exactly what CI runs, in about two minutes. For the full datasets:
+
+```bash
+export KAGGLE_API_TOKEN=...                                  # kaggle.com/settings
+uv run python scripts/fetch.py                               # VisDrone val (548) + ICG (400), ~6 GB download
+uv run mkuav report --backend ort
+```
+
+> [!NOTE]
+> `onnxruntime` and `onnxruntime-openvino` overwrite each other's files, so they are mutually exclusive uv extras. Pick `cpu` or `openvino`, never both. `uv run dvc pull` only works against the author's local DVC remote; everyone else fetches from Kaggle or uses the committed subset.
 
 ## What it does
 
 | Stage | Command | Output |
 |---|---|---|
 | Annotation QA | `mkuav qa --version v1\|v2` | rule counts per dataset, `qa_report_*.json` |
-| Dataset versioning | DVC, git tags `data-v1` (raw) and `data-v2` (QA-cleaned) | `data/*.dvc` |
+| Dataset versioning | DVC, git tags `data-v1` (raw) and `data-v2` (cleaned) | `data/*.dvc` |
 | Detection | `mkuav detect`, `mkuav eval-det` | boxes; per-class AP, mAP@0.5, mAP@0.5:0.95, P/R |
-| Segmentation | `mkuav segment`, `mkuav eval-seg` | class map PNG; per-class IoU, mIoU, pixel accuracy on the holdout |
+| Segmentation | `mkuav segment`, `mkuav eval-seg` | class map PNG; per-class IoU, mIoU, pixel accuracy |
 | Latency | `mkuav bench` | p50 / p95 per backend |
-| Robustness | `mkuav robust` | mAP vs. blur, brightness, JPEG, rotation severity |
+| Robustness | `mkuav robust` | mAP under blur, brightness, JPEG, rotation |
 | Report | `mkuav report` | `report.md`, `metrics.json`, per-stage JSON |
 
-Backends: `cv2` (OpenCV DNN), `ort-cpu` (onnxruntime), `ort-openvino`
-(onnxruntime OpenVINO execution provider). All three share one preprocessing
-and one `cv2.dnn.NMSBoxes` post-processing path, so the forward pass is the only
-variable. If onnxruntime silently drops a requested provider, the loader raises
-rather than reporting a CPU number under the wrong name.
-
-## Data
-
-| Dataset | Split used | Task | Source |
-|---|---|---|---|
-| VisDrone2019-DET | val, 548 images | detection | Kaggle mirror `hassanmojab/visdrone-det` (original 8-column annotations) |
-| ICG Semantic Drone | all 400 images, resized to 1500 px | segmentation | Kaggle mirror `bulentsiyah/semantic-drone-dataset` |
-
-`scripts/fetch.py` pulls both with the Kaggle CLI and lays them out under `data/`.
-Full data is DVC-tracked against a local remote. A 50-image VisDrone and
-20-image ICG subset is committed in `data/ci_subset/` so CI needs no remote.
-
-Two dataset versions are tagged. `data-v1` is the raw download. `data-v2` drops
-ignored-region and "others" rows, clips boxes to the image and de-duplicates.
-Ignored regions are kept in `ignored.json` and used at evaluation time to
-suppress predictions whose centre falls inside them.
+```mermaid
+flowchart LR
+  K[Kaggle mirrors] -->|scripts/fetch.py| V1[(data-v1 raw, DVC)]
+  V1 -->|mkuav qa| V2[(data-v2 cleaned, DVC)]
+  M[ONNX models, release asset] --> D[detect.py / segment.py]
+  D --> B1[cv2.dnn] & B2[onnxruntime] & B3[ORT + OpenVINO]
+  B1 & B2 & B3 --> P[shared NMS / argmax]
+  V2 --> E[metrics_det.py / metrics_seg.py]
+  P --> E
+  E --> R[report.py]
+  P --> L[bench.py] --> R
+  P --> Q[perturb.py] --> R
+  R --> A[report.md + metrics.json, CI artifact]
+```
 
 ## Results
 
-### Annotation QA, VisDrone val (v1)
+Every number here comes from `mkuav report` on `main`, on a laptop i5-1135G7 unless stated.
+
+### Annotation QA, VisDrone val, raw (v1)
 
 | Rule | Boxes | Files |
 |---|---|---|
@@ -54,15 +94,16 @@ suppress predictions whose centre falls inside them.
 | tiny_box (< 16 px², informational) | 103 | 45 |
 
 Zero-area, out-of-bounds, duplicate, malformed and score-zero rows: none in this
-split. ICG masks: 0 invalid class ids, 0 dimension mismatches, 23 of 24 classes present.
-Because the only cleaning that mattered was dropping category 0 and 11 rows the
-loader already ignores, v1 and v2 score identically. The report says so rather
-than implying the cleaning moved the number.
+split. ICG masks: 0 invalid class ids, 0 dimension mismatches, 23 of 24 classes
+present. Because the only cleaning that mattered was dropping category 0 and 11
+rows the loader already ignores, v1 and v2 score identically, and the report
+says so instead of implying the cleaning moved the number. Ignored regions are
+kept and used at evaluation time to suppress predictions inside them.
 
-### Detection, YOLOv8n COCO weights on VisDrone val v2, 548 images
+### Detection, YOLOv8n COCO weights, VisDrone val v2, 548 images
 
-COCO classes are mapped onto six merged VisDrone classes (person, bicycle, car,
-motor, bus, truck). Tricycle classes have no COCO equivalent and are excluded.
+COCO classes are mapped onto six merged VisDrone classes. Tricycle classes have
+no COCO equivalent and are excluded.
 
 | Class | GT boxes | AP@0.5 | AP@0.5:0.95 | P@0.25 | R@0.25 |
 |---|---|---|---|---|---|
@@ -74,79 +115,85 @@ motor, bus, truck). Tricycle classes have no COCO equivalent and are excluded.
 | bicycle | 1287 | 0.010 | 0.009 | 0.286 | 0.002 |
 | **all** | 37182 | **0.120** | **0.069** | 0.769 | 0.161 |
 
-Low absolute scores are expected: the weights were never trained on drone
-imagery, and VisDrone objects are tiny. The harness is the deliverable. Our AP
-implementation matches pycocotools bit-for-bit on the CI subset
-(`tests/test_metrics_det.py`, delta 2.8e-17).
+The weights never saw drone imagery and VisDrone objects are tiny, so low recall
+is expected. What the harness proves is that the AP implementation matches
+pycocotools to 2.8e-17 on the CI subset (`tests/test_metrics_det.py`).
 
-### Latency, single image 640 px, 4 threads, p50 ms
+![detections](assets/detection.jpg)
 
-| Backend | NANI, i5-1135G7 | GitHub runner, EPYC 9V74 |
-|---|---|---|
-| cv2 (OpenCV DNN) | 93 | 117 |
-| ort-cpu | 86 | 218 |
-| ort-openvino (CPU device) | 49 | n/a, plain onnxruntime build |
-
-OpenVINO GPU on the Iris Xe segfaults inside the provider; the benchmark probes
-it in a subprocess and records it as unavailable.
-
-### Robustness, mAP@0.5 on a 100-image subset, baseline 0.180
-
-| Perturbation | sev 1 | sev 2 | sev 3 |
-|---|---|---|---|
-| Gaussian blur k=3 / 7 / 13 | +1 % | −10 % | −24 % |
-| brightness −30 / −60 / −90 | −1 % | −16 % | −32 % |
-| brightness +30 / +60 / +90 | −1 % | −5 % | −25 % |
-| JPEG quality 50 / 20 / 8 | −6 % | −10 % | −43 % |
-| rotation 5° / 15° / 30° | +1 % | −35 % | −58 % |
-
-Severity 0 of every row reproduces the unperturbed mAP exactly. Rotated ground
-truth uses the enclosing axis-aligned box, so rotation numbers are a lower bound.
-
-### Segmentation, UNet on ICG Semantic Drone, 40 held-out images
-
-A plain-convolution UNet trained from scratch on a Kaggle T4 by
-`notebooks/seg_finetune.py` (360 train / 40 holdout, 25 epochs, ten minutes).
-The ONNX is a GitHub release asset (`seg-v1`) that CI downloads; the harness runs
-it through OpenCV DNN and onnxruntime with identical argmax maps.
+### Segmentation, from-scratch UNet, ICG Semantic Drone, 40 held-out images
 
 | Metric | Value |
 |---|---|
 | mIoU, 24 classes | 0.167 |
 | pixel accuracy | 0.721 |
 
-Low mIoU is expected for a from-scratch model on 360 images: the large classes
-(paved area, grass, roof) score well, the rare ones (ar-marker, bald tree,
-bicycle) score zero. The mIoU implementation matches torchmetrics to 1e-5 in
-`tests/test_metrics_seg.py`. Evaluation uses only the 40 stems the kernel never
-trained on; `mkuav eval-seg --all` scores everything if you want the
-optimistic number.
+Plain-convolution UNet, 360 training images, 25 epochs, ten minutes on a Kaggle
+T4 (`notebooks/seg_finetune.py`). Large classes such as paved area and grass
+score well, rare ones such as AR markers and bicycles score zero. OpenCV DNN and
+onnxruntime produce identical argmax maps, and mIoU matches torchmetrics to 1e-5
+(`tests/test_metrics_seg.py`). Only the 40 stems the kernel never trained on are
+scored; `mkuav eval-seg --all` gives the optimistic number.
 
-## Run it
+![ground truth versus prediction](assets/segmentation.jpg)
 
-```bash
-uv sync --extra openvino --extra dev     # or --extra cpu on machines without OpenVINO
-uv run python scripts/fetch.py           # needs KAGGLE_API_TOKEN
-uv run dvc pull                          # or: cp -r data/ci_subset/. data/
-gh release download seg-v1 -p seg_unet_r18.onnx -D models/
-uv run pytest -q
-uv run mkuav report --subset 50 --backend ort --out report.md --json metrics.json
+### Latency, one 640 px image, 4 threads, p50 in ms
+
+| Backend | Laptop i5-1135G7 | GitHub runner, EPYC 9V74 |
+|---|---|---|
+| cv2 (OpenCV DNN) | 93 | 117 |
+| ort-cpu | 86 | 218 |
+| ort-openvino, CPU device | 49 | n/a, plain onnxruntime build |
+
+OpenVINO halves the onnxruntime time on the same cores because its CPU plugin
+fuses and re-tiles the convolutions for the specific ISA at load time, where the
+default onnxruntime CPU provider runs generic kernels. OpenVINO's GPU device on
+the Iris Xe segfaults inside the provider; the benchmark probes it in a
+subprocess and records it as unavailable. If onnxruntime silently drops a
+requested provider, the loader raises rather than reporting a CPU number under
+the wrong name.
+
+### Robustness, mAP@0.5 relative to clean, 100 images
+
+![robustness](assets/robustness.png)
+
+Severity 0 of every perturbation reproduces the unperturbed mAP exactly. JPEG
+quality 8 and 30° rotation hurt most. Rotated ground truth uses the enclosing
+axis-aligned box, so rotation is a lower bound.
+
+## Repository structure
+
 ```
-
-`onnxruntime` and `onnxruntime-openvino` overwrite each other's files, so they
-are mutually exclusive extras. CI uses `cpu`.
-
-## CI
-
-`.github/workflows/ci.yml` installs with uv, copies the committed subset into
-`data/`, runs the tests, runs the report and uploads `report.md`, `metrics.json`
-and per-stage JSON as artifacts. Wall time is about 2.5 minutes.
+.github/workflows/ci.yml   tests + report on the committed subset, artifacts uploaded
+assets/                    images in this README, generated by the harness
+data/ci_subset/            50 VisDrone + 20 ICG images committed for CI
+data/*.dvc                 DVC pointers for the full datasets (local remote)
+models/                    ONNX files land here (release asset), class list, training log
+notebooks/seg_finetune.py  Kaggle script kernel that trains and exports the UNet
+scripts/fetch.py           Kaggle download + layout for both datasets
+src/mkuav/
+  cli.py                   argparse entry point, one subcommand per stage
+  qa.py                    annotation rules and the v2 cleaning step
+  detect.py  segment.py    backend-agnostic loaders, shared pre/post-processing
+  metrics_det.py           COCO-style AP, class mapping, ignored-region filter
+  metrics_seg.py           confusion-matrix IoU, holdout selection
+  bench.py  perturb.py     latency and robustness
+  report.py                Markdown + JSON rendering
+tests/                     15 tests incl. pycocotools and torchmetrics cross-checks
+```
 
 ## Limitations
 
 - COCO weights, not fine-tuned on VisDrone. Absolute mAP is low by design.
 - Tricycle and awning-tricycle GT are excluded, person/people and car/van are merged.
 - Ignored-region filtering is a centre-point approximation of the VisDrone protocol.
-- Rotation robustness uses enclosing boxes for rotated GT.
-- Robustness numbers are on 100 images, all other detection numbers on 548.
-- The segmentation model is trained from scratch on 360 images with no pretrained encoder; it exists to exercise the harness, not to compete.
+- The segmentation model has no pretrained encoder and 360 training images; it exists to exercise the harness.
+- Robustness is measured on 100 images, all other detection numbers on 548.
+
+## Acknowledgements
+
+Data comes from [VisDrone2019-DET](http://aiskyeye.com/) (Zhu et al., *Detection and Tracking Meet Drones Challenge*, TPAMI 2021) via the Kaggle mirror `hassanmojab/visdrone-det`, and the [ICG Semantic Drone Dataset](http://dronedataset.icg.tugraz.at/) (TU Graz) via `bulentsiyah/semantic-drone-dataset`. Both are for non-commercial research use under their own terms. Detection weights are Ultralytics YOLOv8n, exported once to ONNX.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

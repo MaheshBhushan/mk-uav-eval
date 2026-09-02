@@ -14,8 +14,8 @@ jobs:
       # The full datasets are DVC-tracked on a local remote; CI runs on the
       # committed 50-image VisDrone / 20-image ICG subset laid out identically.
       - run: cp -r data/ci_subset/. data/
-      # Segmentation model is a release asset, not a git blob.
-      - run: gh release download seg-v1 -p seg_unet_r18.onnx -D models/
+      # Models are release assets, not git blobs.
+      - run: gh release download models-v1 -p "*.onnx" -D models/
         env:
           GH_TOKEN: ${{ github.token }}
       - run: uv run pytest -q
