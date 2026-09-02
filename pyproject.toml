@@ -6,22 +6,26 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "numpy>=1.26",
     "opencv-python-headless>=4.10",
-    "onnxruntime>=1.18",
 ]
 
 [project.optional-dependencies]
+# onnxruntime and onnxruntime-openvino install into the same package dir and
+# clobber each other, so exactly one of these two extras must be chosen.
+cpu = ["onnxruntime>=1.18"]
+openvino = ["onnxruntime-openvino>=1.18"]
 dev = [
     "pytest>=8",
     "pycocotools>=2.0.7",
     "torchmetrics>=1.4",
     "torch>=2.3",
     "dvc>=3.50",
-    "gdown>=5",
-    "onnxruntime-openvino>=1.18",
 ]
 
 [project.scripts]
 mkuav = "mkuav.cli:main"
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "openvino" }]]
 
 [build-system]
 requires = ["hatchling"]

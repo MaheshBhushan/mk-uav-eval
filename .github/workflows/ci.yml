@@ -10,5 +10,5 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.12
-      - run: uv sync --extra dev
+      - run: uv sync --extra cpu --extra dev
       - run: uv run pytest -q
