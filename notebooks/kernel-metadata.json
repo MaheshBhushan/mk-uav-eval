@@ -1,0 +1,13 @@
+{
+  "id": "kodurimahesh/mk-uav-seg-finetune",
+  "title": "mk-uav-seg-finetune",
+  "code_file": "seg_finetune.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["bulentsiyah/semantic-drone-dataset"],
+  "competition_sources": [],
+  "kernel_sources": []
+}
