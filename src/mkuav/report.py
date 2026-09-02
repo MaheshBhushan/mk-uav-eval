@@ -194,9 +194,12 @@ def run_stages(subset, backend, model, skip_seg, json_dir=None):
         try:
             from mkuav import metrics_seg
 
+            seg_stems = metrics_seg.holdout_stems("data/icg/masks")
+            if subset:
+                seg_stems = seg_stems[:subset]
             seg = metrics_seg.run_for_report(
                 "models/seg_unet_r18.onnx", "data/icg/images", "data/icg/masks",
-                "data/icg/class_dict_seg.csv", stems, backend,
+                "data/icg/class_dict_seg.csv", seg_stems, backend,
             )
         except ImportError:
             seg = None
@@ -355,9 +358,10 @@ def _md_segmentation_section(seg):
     lines.append("| class | IoU |")
     lines.append("|---|---|")
     for name, iou in seg.get("per_class_iou", {}).items():
-        lines.append(f"| {name} | {iou:.4f} |")
+        lines.append(f"| {name} | {_fmt(iou)} |")
     lines.append("")
-    lines.append(f"mIoU: {seg.get('miou', float('nan')):.4f}  pixel acc: {seg.get('pixel_acc', float('nan')):.4f}")
+    lines.append(f"mIoU: {_fmt(seg.get('miou'))}  pixel acc: {_fmt(seg.get('pixel_acc'))}  "
+                 f"images: {seg.get('num_images', '?')} (holdout)")
     lines.append("")
     return "\n".join(lines)
 

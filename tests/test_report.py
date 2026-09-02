@@ -75,3 +75,11 @@ def test_nan_becomes_null():
     assert reloaded["a"] is None
     assert reloaded["b"][1] is None
     assert reloaded["c"]["d"] is None
+
+
+def test_segmentation_section_handles_null_iou(tmp_path):
+    from mkuav import report
+    seg = {"per_class_iou": {"tree": 0.5, "conflicting": None}, "miou": 0.5, "pixel_acc": 0.9, "num_images": 2}
+    md = report._md_segmentation_section(seg)
+    assert "| conflicting | nan |" in md
+    assert "mIoU: 0.5000" in md

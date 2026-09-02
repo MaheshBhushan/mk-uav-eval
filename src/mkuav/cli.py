@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_parser.add_argument("--model", default="models/seg_unet_r18.onnx")
             cmd_parser.add_argument("--backend", choices=("cv2", "ort"), default="ort")
             cmd_parser.add_argument("--subset", type=int, default=0)
+            cmd_parser.add_argument("--all", action="store_true",
+                                    help="score every image, not just the 40-image holdout")
             cmd_parser.add_argument("--json", dest="json_path", default=None)
         if name == "bench":
             cmd_parser.add_argument("--model", default="models/yolov8n.onnx")

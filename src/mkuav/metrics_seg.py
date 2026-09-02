@@ -52,6 +52,16 @@ def load_class_names(csv_path: str) -> list[str]:
     return names
 
 
+HOLDOUT = 40  # the training kernel holds out the last 40 sorted stems as its val split
+
+
+def holdout_stems(mask_dir: str, n: int = HOLDOUT) -> list[str]:
+    """Stems the segmentation model never trained on: the last `n` in sorted order.
+    On the CI subset (20 masks, all from the holdout) this is simply every stem."""
+    stems = sorted(Path(p).stem for p in glob.glob(f"{mask_dir}/*.png"))
+    return stems[-n:]
+
+
 def evaluate_dataset(handle, img_dir: str, mask_dir: str, stems: list[str]) -> dict:
     """Run segmentation over `stems` and accumulate one confusion matrix."""
     cm = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.int64)
@@ -101,7 +111,10 @@ def main(args) -> int:
     mask_dir = "data/icg/masks"
     csv_path = "data/icg/class_dict_seg.csv"
 
-    stems = sorted(Path(p).stem for p in glob.glob(f"{mask_dir}/*.png"))
+    if args.all:
+        stems = sorted(Path(p).stem for p in glob.glob(f"{mask_dir}/*.png"))
+    else:
+        stems = holdout_stems(mask_dir)
     if args.subset:
         stems = stems[: args.subset]
 
