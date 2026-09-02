@@ -1,7 +1,7 @@
 name: ci
 on: [push, pull_request]
 jobs:
-  test:
+  eval:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -11,4 +11,16 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --extra cpu --extra dev
+      # The full datasets are DVC-tracked on a local remote; CI runs on the
+      # committed 50-image VisDrone / 20-image ICG subset laid out identically.
+      - run: cp -r data/ci_subset/. data/
       - run: uv run pytest -q
+      - run: uv run mkuav report --subset 50 --backend ort --out report.md --json metrics.json --json-dir stages
+      - run: head -80 report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: |
+            report.md
+            metrics.json
+            stages/

@@ -27,6 +27,14 @@ mkuav = "mkuav.cli:main"
 [tool.uv]
 conflicts = [[{ extra = "cpu" }, { extra = "openvino" }]]
 
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
