@@ -1,0 +1,6 @@
+outs:
+- md5: 2c634320d7d611fa8f0485ed384b9146.dir
+  size: 305928541
+  nfiles: 801
+  hash: md5
+  path: icg

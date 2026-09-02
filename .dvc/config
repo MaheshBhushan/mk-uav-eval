@@ -1,0 +1,4 @@
+[core]
+    remote = local
+['remote "local"']
+    url = /run/media/maheshk/New Volume1/MK-solutions/mk-uav-eval-dvc-store

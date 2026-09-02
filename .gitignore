@@ -4,9 +4,13 @@ __pycache__/
 .pytest_cache/
 /data/*
 !/data/ci_subset/
+!/data/*.dvc
+!/data/.gitignore
 /models/*
 !/models/*.dvc
 !/models/.gitignore
+!/models/seg_classes.json
+!/models/seg_train_log.json
 report.md
 metrics.json
 *.egg-info/
