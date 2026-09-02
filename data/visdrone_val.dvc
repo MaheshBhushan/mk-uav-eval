@@ -1,6 +1,6 @@
 outs:
-- md5: aa94816c02b6e862c0923a8603954cec.dir
-  size: 82683514
+- md5: 1217d02b91d1a78b0eb4cbf1d53d4c42.dir
+  size: 82126944
   nfiles: 1096
   hash: md5
   path: visdrone_val

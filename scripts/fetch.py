@@ -18,7 +18,7 @@ import cv2
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 
-VISDRONE_DATASET = "banuprasadb/visdrone-dataset"
+VISDRONE_DATASET = "hassanmojab/visdrone-det"  # original 8-column annotations, not YOLO-converted
 ICG_DATASET = "bulentsiyah/semantic-drone-dataset"
 
 VISDRONE_VAL_DIR = DATA / "visdrone_val"
@@ -50,11 +50,11 @@ def fetch_visdrone_val() -> None:
     if not _populated(raw):
         _download_and_unzip(VISDRONE_DATASET, raw)
 
-    # The Kaggle mirror ships train/val/test-dev/test-challenge splits under
-    # VisDrone_Dataset/VisDrone2019-DET-<split>/{images,labels}. We only want val.
-    val_root = next(raw.rglob("VisDrone2019-DET-val"))
+    # The mirror ships every split; val sits nested as
+    # VisDrone2019-DET-val/VisDrone2019-DET-val/{images,annotations}.
+    val_root = next(p for p in raw.rglob("VisDrone2019-DET-val") if (p / "annotations").is_dir())
     val_images = val_root / "images"
-    val_labels = val_root / "labels"
+    val_labels = val_root / "annotations"
 
     images_dir.mkdir(parents=True, exist_ok=True)
     ann_dir.mkdir(parents=True, exist_ok=True)
