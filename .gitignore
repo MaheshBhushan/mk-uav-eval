@@ -14,3 +14,4 @@ __pycache__/
 report.md
 metrics.json
 *.egg-info/
+_raw/
