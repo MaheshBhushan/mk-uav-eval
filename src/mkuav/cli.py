@@ -53,6 +53,15 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_parser.add_argument("--version", choices=("v1", "v2"), default="v1")
             cmd_parser.add_argument("--json", dest="json_path", default=None)
             cmd_parser.add_argument("--clean", action="store_true")
+        if name == "report":
+            cmd_parser.add_argument("--subset", type=int, default=0)
+            cmd_parser.add_argument("--backend", choices=("cv2", "ort"), default="ort")
+            cmd_parser.add_argument("--model", default="models/yolov8n.onnx")
+            cmd_parser.add_argument("--out", default="report.md")
+            cmd_parser.add_argument("--json", default="metrics.json")
+            cmd_parser.add_argument("--skip-seg", dest="skip_seg", action="store_true")
+            cmd_parser.add_argument("--from-dir", dest="from_dir", default=None)
+            cmd_parser.add_argument("--json-dir", dest="json_dir", default=None)
     return parser
 
 
@@ -82,6 +91,10 @@ def main(argv=None) -> int:
         from mkuav import qa
 
         return qa.main(args)
+    if args.cmd == "report":
+        from mkuav import report
+
+        return report.main(args)
     print(f"{args.cmd}: not implemented yet", file=sys.stderr)
     return 2
 
