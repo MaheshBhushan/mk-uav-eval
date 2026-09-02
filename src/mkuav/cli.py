@@ -18,7 +18,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mkuav", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", metavar="COMMAND")
     for name, help_text in SUBCOMMANDS.items():
-        sub.add_parser(name, help=help_text)
+        cmd_parser = sub.add_parser(name, help=help_text)
+        if name == "detect":
+            cmd_parser.add_argument("image")
+            cmd_parser.add_argument("--backend", choices=("cv2", "ort"), default="cv2")
+            cmd_parser.add_argument("--model", default="models/yolov8n.onnx")
+            cmd_parser.add_argument("--conf", type=float, default=0.25)
+            cmd_parser.add_argument("--iou", type=float, default=0.5)
     return parser
 
 
@@ -28,6 +34,10 @@ def main(argv=None) -> int:
     if args.cmd is None:
         parser.print_help()
         return 0
+    if args.cmd == "detect":
+        from mkuav import detect
+
+        return detect.main(args)
     print(f"{args.cmd}: not implemented yet", file=sys.stderr)
     return 2
 
