@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 
-BACKENDS = ("cv2", "ort")
+BACKENDS = ("cv2", "ort", "ort-cpu", "ort-openvino", "ort-openvino-gpu")
 
 
 def preprocess(image_bgr, size=640):
@@ -19,15 +19,22 @@ def preprocess(image_bgr, size=640):
     return blob, scale, (left, top)
 
 
-def load(model_path: str, backend: str):
-    """Return an opaque handle for `backend` ("cv2" or "ort")."""
+def load(model_path: str, backend: str, sess_options=None):
+    """Return an opaque handle for `backend` (one of BACKENDS)."""
     if backend == "cv2":
         net = cv2.dnn.readNetFromONNX(model_path)
         return ("cv2", net)
-    if backend == "ort":
+    if backend in ("ort", "ort-cpu", "ort-openvino", "ort-openvino-gpu"):
         import onnxruntime as ort
 
-        session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        if backend in ("ort", "ort-cpu"):
+            providers = ["CPUExecutionProvider"]
+        elif backend == "ort-openvino":
+            providers = [("OpenVINOExecutionProvider", {"device_type": "CPU"}), "CPUExecutionProvider"]
+        else:
+            providers = [("OpenVINOExecutionProvider", {"device_type": "GPU"}), "CPUExecutionProvider"]
+
+        session = ort.InferenceSession(model_path, sess_options=sess_options, providers=providers)
         return ("ort", session)
     raise ValueError(f"unknown backend {backend!r}, expected one of {BACKENDS}")
 

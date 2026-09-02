@@ -25,6 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_parser.add_argument("--model", default="models/yolov8n.onnx")
             cmd_parser.add_argument("--conf", type=float, default=0.25)
             cmd_parser.add_argument("--iou", type=float, default=0.5)
+        if name == "bench":
+            cmd_parser.add_argument("--model", default="models/yolov8n.onnx")
+            cmd_parser.add_argument("--image", default="/var/tmp/bus.jpg")
+            cmd_parser.add_argument("--iters", type=int, default=100)
+            cmd_parser.add_argument("--warmup", type=int, default=20)
+            cmd_parser.add_argument("--json", action="store_true")
     return parser
 
 
@@ -38,6 +44,10 @@ def main(argv=None) -> int:
         from mkuav import detect
 
         return detect.main(args)
+    if args.cmd == "bench":
+        from mkuav import bench
+
+        return bench.main(args)
     print(f"{args.cmd}: not implemented yet", file=sys.stderr)
     return 2
 
