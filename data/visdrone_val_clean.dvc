@@ -1,0 +1,6 @@
+outs:
+- md5: cc27a5acb0a03b99ef8a0ff8db3709c2.dir
+  size: 931371
+  nfiles: 549
+  hash: md5
+  path: visdrone_val_clean

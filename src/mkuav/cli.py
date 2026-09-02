@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_parser.add_argument("--iters", type=int, default=100)
             cmd_parser.add_argument("--warmup", type=int, default=20)
             cmd_parser.add_argument("--json", action="store_true")
+        if name == "qa":
+            cmd_parser.add_argument("--dataset", choices=("visdrone", "icg", "all"), default="all")
+            cmd_parser.add_argument("--version", choices=("v1", "v2"), default="v1")
+            cmd_parser.add_argument("--json", dest="json_path", default=None)
+            cmd_parser.add_argument("--clean", action="store_true")
     return parser
 
 
@@ -48,6 +53,10 @@ def main(argv=None) -> int:
         from mkuav import bench
 
         return bench.main(args)
+    if args.cmd == "qa":
+        from mkuav import qa
+
+        return qa.main(args)
     print(f"{args.cmd}: not implemented yet", file=sys.stderr)
     return 2
 
