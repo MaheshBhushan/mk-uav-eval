@@ -31,6 +31,16 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_parser.add_argument("--iters", type=int, default=100)
             cmd_parser.add_argument("--warmup", type=int, default=20)
             cmd_parser.add_argument("--json", action="store_true")
+        if name == "eval-det":
+            cmd_parser.add_argument("--version", choices=("v1", "v2"), default="v2")
+            cmd_parser.add_argument("--backend", choices=("cv2", "ort"), default="ort")
+            cmd_parser.add_argument("--model", default="models/yolov8n.onnx")
+            cmd_parser.add_argument("--subset", type=int, default=0)
+            cmd_parser.add_argument("--conf", type=float, default=0.001)
+            cmd_parser.add_argument("--op-conf", dest="op_conf", type=float, default=0.25)
+            cmd_parser.add_argument("--no-ignore", dest="no_ignore", action="store_true")
+            cmd_parser.add_argument("--pred-cache", dest="pred_cache", default=None)
+            cmd_parser.add_argument("--json", dest="json_path", default=None)
         if name == "qa":
             cmd_parser.add_argument("--dataset", choices=("visdrone", "icg", "all"), default="all")
             cmd_parser.add_argument("--version", choices=("v1", "v2"), default="v1")
@@ -53,6 +63,10 @@ def main(argv=None) -> int:
         from mkuav import bench
 
         return bench.main(args)
+    if args.cmd == "eval-det":
+        from mkuav import metrics_det
+
+        return metrics_det.main(args)
     if args.cmd == "qa":
         from mkuav import qa
 
