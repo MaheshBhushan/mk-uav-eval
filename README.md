@@ -16,6 +16,7 @@ Every number below was produced by `mkuav report` on the current `main`.
 | Annotation QA | `mkuav qa --version v1\|v2` | rule counts per dataset, `qa_report_*.json` |
 | Dataset versioning | DVC, git tags `data-v1` (raw) and `data-v2` (QA-cleaned) | `data/*.dvc` |
 | Detection | `mkuav detect`, `mkuav eval-det` | boxes; per-class AP, mAP@0.5, mAP@0.5:0.95, P/R |
+| Segmentation | `mkuav segment`, `mkuav eval-seg` | class map PNG; per-class IoU, mIoU, pixel accuracy on the holdout |
 | Latency | `mkuav bench` | p50 / p95 per backend |
 | Robustness | `mkuav robust` | mAP vs. blur, brightness, JPEG, rotation severity |
 | Report | `mkuav report` | `report.md`, `metrics.json`, per-stage JSON |
@@ -102,12 +103,24 @@ it in a subprocess and records it as unavailable.
 Severity 0 of every row reproduces the unperturbed mAP exactly. Rotated ground
 truth uses the enclosing axis-aligned box, so rotation numbers are a lower bound.
 
-### Segmentation
+### Segmentation, UNet on ICG Semantic Drone, 40 held-out images
 
-Pending. The UNet fine-tune runs as a Kaggle script kernel
-(`notebooks/seg_finetune.py`); the account currently has no GPU quota, so the
-report marks the section "not available in this run" and `metrics.json`
-carries `"segmentation": null`. Mask QA already runs.
+A plain-convolution UNet trained from scratch on a Kaggle T4 by
+`notebooks/seg_finetune.py` (360 train / 40 holdout, 25 epochs, ten minutes).
+The ONNX is a GitHub release asset (`seg-v1`) that CI downloads; the harness runs
+it through OpenCV DNN and onnxruntime with identical argmax maps.
+
+| Metric | Value |
+|---|---|
+| mIoU, 24 classes | 0.167 |
+| pixel accuracy | 0.721 |
+
+Low mIoU is expected for a from-scratch model on 360 images: the large classes
+(paved area, grass, roof) score well, the rare ones (ar-marker, bald tree,
+bicycle) score zero. The mIoU implementation matches torchmetrics to 1e-5 in
+`tests/test_metrics_seg.py`. Evaluation uses only the 40 stems the kernel never
+trained on; `mkuav eval-seg --all` scores everything if you want the
+optimistic number.
 
 ## Run it
 
@@ -115,6 +128,7 @@ carries `"segmentation": null`. Mask QA already runs.
 uv sync --extra openvino --extra dev     # or --extra cpu on machines without OpenVINO
 uv run python scripts/fetch.py           # needs KAGGLE_API_TOKEN
 uv run dvc pull                          # or: cp -r data/ci_subset/. data/
+gh release download seg-v1 -p seg_unet_r18.onnx -D models/
 uv run pytest -q
 uv run mkuav report --subset 50 --backend ort --out report.md --json metrics.json
 ```
@@ -135,3 +149,4 @@ and per-stage JSON as artifacts. Wall time is about 2.5 minutes.
 - Ignored-region filtering is a centre-point approximation of the VisDrone protocol.
 - Rotation robustness uses enclosing boxes for rotated GT.
 - Robustness numbers are on 100 images, all other detection numbers on 548.
+- The segmentation model is trained from scratch on 360 images with no pretrained encoder; it exists to exercise the harness, not to compete.
