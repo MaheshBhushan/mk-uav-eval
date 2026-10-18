@@ -18,6 +18,7 @@ classes in CLASSES.
 numpy only: pycocotools/torchmetrics are used in the tests, never here.
 """
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -273,8 +274,13 @@ def filter_ignored(pred_by_image, ignored_by_image):
     return out
 
 
-def predict_dataset(model_path, backend, img_dir, stems, conf=0.001, iou=0.6, cache_path=None):
-    """Run detection over `stems`, optionally caching the raw predictions to JSON."""
+def predict_dataset(model_path, backend, img_dir, stems, conf=0.001, iou=0.6, cache_path=None,
+                    *, timings_ms=None, strict=False, sess_options=None):
+    """Run detection over `stems`, optionally caching raw predictions to JSON.
+
+    timings_ms collects uncached inference-call durations, excluding image reads.
+    strict rejects unreadable images instead of treating them as empty predictions.
+    """
     if cache_path is not None and Path(cache_path).exists():
         with open(cache_path) as f:
             cached = json.load(f)
@@ -285,15 +291,20 @@ def predict_dataset(model_path, backend, img_dir, stems, conf=0.001, iou=0.6, ca
 
     from mkuav import detect
 
-    handle = detect.load(model_path, backend)
+    handle = detect.load(model_path, backend, sess_options=sess_options)
     img_dir = Path(img_dir)
     out = {}
     for stem in stems:
         img = cv2.imread(str(img_dir / f"{stem}.jpg"))
         if img is None:
+            if strict:
+                raise ValueError(f"cannot read image {img_dir / f'{stem}.jpg'}")
             out[stem] = []
             continue
+        start = time.perf_counter()
         out[stem] = detect.run(handle, img, conf=conf, iou=iou)
+        if timings_ms is not None:
+            timings_ms.append((time.perf_counter() - start) * 1000)
     if cache_path is not None:
         Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
         with open(cache_path, "w") as f:

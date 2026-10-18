@@ -54,6 +54,60 @@ uv run mkuav report --backend ort
 > [!NOTE]
 > `onnxruntime` and `onnxruntime-openvino` overwrite each other's files, so they are mutually exclusive uv extras. Pick `cpu` or `openvino`, never both. `uv run dvc pull` only works against the author's local DVC remote; everyone else fetches from Kaggle or uses the committed subset.
 
+## Asyncio evaluation service
+
+Python callers can submit detection and segmentation evaluations concurrently:
+
+```python
+import asyncio
+from mkuav.service import EvaluationJob, EvaluationService
+
+async def main():
+    async with EvaluationService(max_concurrent=2, max_queue=8) as service:
+        jobs = [
+            EvaluationJob("detection", "models/yolov8n.onnx", backend="cv2",
+                          data_root="data/ci_subset", version="v2", subset=10),
+            EvaluationJob("segmentation", "models/seg_unet_r18.onnx", backend="ort",
+                          data_root="data/ci_subset", subset=10),
+        ]
+        results = await asyncio.gather(
+            *(service.evaluate(job, timeout=60) for job in jobs)
+        )
+        for result in results:
+            print(result["dataset"], result["metrics"])
+            print(result["queue_ms"], result["inference"]["p95_ms"])
+
+asyncio.run(main())
+```
+
+The API uses the existing numerical evaluators. Detection selects sorted
+annotation stems from the requested VisDrone v1/v2 version and applies its ignored
+regions. Segmentation selects the last 40 sorted ICG mask stems, matching the
+training holdout. Both tasks apply `subset` after split selection. Results include
+the selected stems, split name, resolved data/model paths, backend and metrics.
+Unreadable selected images or masks fail the job. The service never cleans datasets
+or shares prediction caches. Inputs must remain unchanged while jobs run.
+
+Each active job owns a fresh subprocess and model handle. Native CPU execution uses
+four threads per process. `max_concurrent` bounds active workers; `max_queue` bounds
+additional waiting jobs. Excess submissions raise `ServiceBusyError` immediately.
+Backend errors and native crashes raise `BackendJobError` without stopping other
+jobs. Missing models or backend providers fail explicitly.
+
+`timeout` covers queueing and execution in seconds. Alternatively, pass
+`deadline=asyncio.get_running_loop().time() + seconds`. Expiry raises `TimeoutError`.
+Cancelling the awaiting task kills and reaps its worker before releasing capacity.
+Context exit or `await service.aclose()` cancels all remaining jobs and rejects
+new submissions. Use one service per event loop.
+
+`queue_ms` measures submission to worker dispatch. `execution_ms` includes process
+startup, imports, model loading, input reads, evaluation and serialization.
+`inference` contains per-image `samples_ms`, count, total, mean, p50 and p95 for
+the shared inference call, including preprocessing and postprocessing. These
+samples exclude queueing, model loading, image reads and metric computation.
+They include the first call and reflect CPU contention under concurrent load.
+Undefined metric values serialize as JSON `null`.
+
 ## What it does
 
 | Stage | Command | Output |
@@ -177,6 +231,7 @@ src/mkuav/
   detect.py  segment.py    backend-agnostic loaders, shared pre/post-processing
   metrics_det.py           COCO-style AP, class mapping, ignored-region filter
   metrics_seg.py           confusion-matrix IoU, holdout selection
+  service.py eval_worker.py bounded asyncio API and isolated evaluation worker
   bench.py  perturb.py     latency and robustness
   report.py                Markdown + JSON rendering
 tests/                     15 tests incl. pycocotools and torchmetrics cross-checks
