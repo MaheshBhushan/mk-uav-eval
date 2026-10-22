@@ -15,3 +15,6 @@ report.md
 metrics.json
 *.egg-info/
 _raw/
+.env
+.env.*
+!.env.example
