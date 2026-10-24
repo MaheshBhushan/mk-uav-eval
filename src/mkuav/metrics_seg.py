@@ -4,6 +4,7 @@ numpy only: torchmetrics is used to cross-check in the tests, never here.
 """
 import csv
 import glob
+import time
 from pathlib import Path
 
 import cv2
@@ -62,8 +63,13 @@ def holdout_stems(mask_dir: str, n: int = HOLDOUT) -> list[str]:
     return stems[-n:]
 
 
-def evaluate_dataset(handle, img_dir: str, mask_dir: str, stems: list[str]) -> dict:
-    """Run segmentation over `stems` and accumulate one confusion matrix."""
+def evaluate_dataset(handle, img_dir: str, mask_dir: str, stems: list[str], *,
+                     timings_ms=None, strict=False) -> dict:
+    """Run segmentation over `stems` and accumulate one confusion matrix.
+
+    timings_ms collects inference-call durations, excluding image/mask reads.
+    strict rejects unreadable pairs instead of silently skipping them.
+    """
     cm = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.int64)
     for stem in stems:
         img_path = str(Path(img_dir) / f"{stem}.jpg")
@@ -71,10 +77,15 @@ def evaluate_dataset(handle, img_dir: str, mask_dir: str, stems: list[str]) -> d
         image = cv2.imread(img_path)
         gt = cv2.imread(mask_path, cv2.IMREAD_UNCHANGED)
         if image is None or gt is None:
+            if strict:
+                raise ValueError(f"cannot read image/mask pair {img_path}, {mask_path}")
             continue
         if gt.ndim == 3:
             gt = gt[:, :, 0]
+        start = time.perf_counter()
         pred = run(handle, image)
+        if timings_ms is not None:
+            timings_ms.append((time.perf_counter() - start) * 1000)
         cm += confusion(pred, gt)
 
     per_class_iou, miou, pixel_acc = iou_from_confusion(cm)
