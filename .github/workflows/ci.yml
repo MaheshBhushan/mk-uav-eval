@@ -13,9 +13,19 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --extra cpu --extra dev
-      # The full datasets are DVC-tracked on a local remote; CI runs on the
-      # committed 50-image VisDrone / 20-image ICG subset laid out identically.
-      - run: cp -r data/ci_subset/. data/
+      # The full datasets are DVC-tracked on MinIO. CI fetches the 50-image
+      # VisDrone / 20-image ICG subset through a short-lived presigned-URL
+      # manifest (repo variable SUBSET_MANIFEST_URL) and holds no MinIO
+      # credentials. Without the variable it uses the committed copy.
+      - name: fetch dataset subset
+        env:
+          SUBSET_MANIFEST_URL: ${{ vars.SUBSET_MANIFEST_URL }}
+        run: |
+          if [ -n "$SUBSET_MANIFEST_URL" ]; then
+            uv run python scripts/fetch_presigned.py "$SUBSET_MANIFEST_URL" --dest data/
+          else
+            cp -r data/ci_subset/. data/
+          fi
       # Models are release assets, not git blobs.
       - run: gh release download models-v1 -p "*.onnx" -D models/
         env:

@@ -1,4 +1,7 @@
 [core]
-    remote = local
+    remote = minio
+['remote "minio"']
+    url = s3://mk-uav-eval/dvc
+    endpointurl = http://localhost:9000
 ['remote "local"']
     url = /run/media/maheshk/New Volume1/MK-solutions/mk-uav-eval-dvc-store
