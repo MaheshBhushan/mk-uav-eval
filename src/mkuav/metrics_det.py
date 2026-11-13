@@ -15,6 +15,12 @@ are dropped from the ground truth entirely; predictions of any COCO class not li
 above are discarded before matching. Evaluation therefore runs over the 6 merged
 classes in CLASSES.
 
+A model fine-tuned on VisDrone (notebooks/det_finetune) predicts the 10 VisDrone
+classes in Ultralytics VisDrone.yaml order (category id - 1). `pred_classes="visdrone"`
+maps those ids onto the same 6 merged classes with FINETUNED_TO_CLASS; its tricycle
+predictions are discarded like unmapped COCO classes, so the ground truth and class
+set are identical for both models.
+
 numpy only: pycocotools/torchmetrics are used in the tests, never here.
 """
 import json
@@ -39,6 +45,10 @@ VISDRONE_TO_CLASS = {
     10: "motor",
 }
 CLASS_MAP = {"coco": COCO_TO_CLASS, "visdrone": VISDRONE_TO_CLASS}
+# Ultralytics VisDrone.yaml class id (VisDrone category - 1) -> merged class name.
+FINETUNED_TO_CLASS = {cat - 1: name for cat, name in VISDRONE_TO_CLASS.items()}
+# Model output class id -> merged class name, selected by `pred_classes`.
+PRED_CLASS_MAPS = {"coco": COCO_TO_CLASS, "visdrone": FINETUNED_TO_CLASS}
 
 DEFAULT_IOU_THRS = np.arange(0.5, 0.96, 0.05)
 MAX_DETS = 100
@@ -121,8 +131,8 @@ def _by_class(items, key):
     return out
 
 
-def _pred_class(pred):
-    return COCO_TO_CLASS.get(int(pred["class_id"]))
+def _pred_class(pred, mapping=COCO_TO_CLASS):
+    return mapping.get(int(pred["class_id"]))
 
 
 def _topk(preds, k=MAX_DETS):
@@ -132,20 +142,27 @@ def _topk(preds, k=MAX_DETS):
     return [preds[i] for i in order]
 
 
-def evaluate(pred_by_image, gt_by_image, iou_thrs=DEFAULT_IOU_THRS, op_conf=0.25, max_dets=MAX_DETS):
+def evaluate(pred_by_image, gt_by_image, iou_thrs=DEFAULT_IOU_THRS, op_conf=0.25, max_dets=MAX_DETS,
+             pred_classes="coco"):
     """Full COCO-style evaluation over the 6 merged classes.
 
-    Returns per-class AP@0.5 / AP@0.5:0.95, the two mAPs, and precision/recall at
-    `op_conf` per class and overall.
+    `pred_classes` names the model's label space in PRED_CLASS_MAPS. Returns per-class
+    AP@0.5 / AP@0.5:0.95, the two mAPs, and precision/recall at `op_conf` per class
+    and overall.
     """
+    mapping = PRED_CLASS_MAPS[pred_classes]
+
+    def pred_class(p):
+        return _pred_class(p, mapping)
+
     iou_thrs = np.asarray(iou_thrs, dtype=np.float64)
     stems = sorted(set(gt_by_image) | set(pred_by_image))
 
     # per class: list of (tp_flags per iou_thr, scores) plus gt counts
     acc = {name: {"tp": [[] for _ in iou_thrs], "scores": [], "n_gt": 0} for name in CLASSES}
     for stem in stems:
-        preds = _topk([p for p in pred_by_image.get(stem, []) if _pred_class(p) is not None], max_dets)
-        p_cls = _by_class(preds, _pred_class)
+        preds = _topk([p for p in pred_by_image.get(stem, []) if pred_class(p) is not None], max_dets)
+        p_cls = _by_class(preds, pred_class)
         g_cls = _by_class(gt_by_image.get(stem, []), lambda g: g["class_name"])
         for name in CLASSES:
             p, g = p_cls[name], g_cls[name]
@@ -335,11 +352,12 @@ def main(args) -> int:
     if not args.no_ignore:
         preds = filter_ignored(preds, ignored_by_image)
 
-    result = evaluate(preds, gt_by_image, op_conf=args.op_conf)
+    result = evaluate(preds, gt_by_image, op_conf=args.op_conf, pred_classes=args.classes)
     result["version"] = version
     result["backend"] = args.backend
     result["model"] = args.model
     result["conf"] = args.conf
+    result["pred_classes"] = args.classes
     result["ignore_regions"] = not args.no_ignore
 
     print(f"{'class':<10}{'n_gt':>8}{'AP@0.5':>10}{'AP@0.5:0.95':>14}{'P@op':>8}{'R@op':>8}")

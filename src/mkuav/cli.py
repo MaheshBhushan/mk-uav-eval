@@ -52,6 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
             cmd_parser.add_argument("--op-conf", dest="op_conf", type=float, default=0.25)
             cmd_parser.add_argument("--no-ignore", dest="no_ignore", action="store_true")
             cmd_parser.add_argument("--pred-cache", dest="pred_cache", default=None)
+            cmd_parser.add_argument("--classes", choices=("coco", "visdrone"), default="coco",
+                                    help="model label space: COCO 80 or fine-tuned VisDrone 10")
             cmd_parser.add_argument("--json", dest="json_path", default=None)
         if name == "robust":
             cmd_parser.add_argument("--subset", type=int, default=0)

@@ -1,0 +1,45 @@
+{
+  "gpus": [
+    "Tesla T4",
+    "Tesla T4"
+  ],
+  "torch": "2.11.0+cu130",
+  "ultralytics": "8.4.210",
+  "python": "3.13.16",
+  "start_weights": "yolov8n.pt (COCO)",
+  "epochs": 50,
+  "imgsz": 640,
+  "batch": 32,
+  "seed": 0,
+  "exported_checkpoint": "last.pt",
+  "onnx_opset": 12,
+  "train_images": 5998,
+  "holdout_images": 473,
+  "holdout_sequences": [
+    "0000002",
+    "0000056",
+    "0000111",
+    "0000143",
+    "0000179",
+    "0000220",
+    "0000252",
+    "0000297",
+    "0000342",
+    "9999951",
+    "9999987"
+  ],
+  "train_boxes_incl_holdout": 343204,
+  "train_wall_s": 2833.6,
+  "class_names": [
+    "pedestrian",
+    "people",
+    "bicycle",
+    "car",
+    "van",
+    "truck",
+    "tricycle",
+    "awning-tricycle",
+    "bus",
+    "motor"
+  ]
+}
