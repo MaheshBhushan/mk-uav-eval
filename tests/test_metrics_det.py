@@ -74,6 +74,24 @@ def test_filter_ignored_drops_by_centre():
     assert out["a"][0]["bbox"][0] == 100
 
 
+def test_finetuned_class_map_matches_ground_truth_mapping():
+    """VisDrone-trained ids (category - 1) land on the same merged classes as the GT."""
+    for cat, name in md.VISDRONE_TO_CLASS.items():
+        assert md.FINETUNED_TO_CLASS[cat - 1] == name
+    assert 6 not in md.FINETUNED_TO_CLASS and 7 not in md.FINETUNED_TO_CLASS  # tricycles
+
+    gt = {"a": [{"bbox": _box(0, 0), "class_name": "car"}, {"bbox": _box(50, 50), "class_name": "motor"}]}
+    # fine-tuned ids: 4 van -> car, 9 motor -> motor, 6 tricycle -> dropped
+    preds = {"a": [{"bbox": _box(0, 0), "score": 0.9, "class_id": 4},
+                   {"bbox": _box(50, 50), "score": 0.8, "class_id": 9},
+                   {"bbox": _box(90, 90), "score": 0.7, "class_id": 6}]}
+    res = md.evaluate(preds, gt, iou_thrs=[0.5], op_conf=0.5, pred_classes="visdrone")
+    assert res["map50"] == pytest.approx(1.0)
+    assert res["overall"]["n_pred_op"] == 2
+    # read as COCO ids, 4 (airplane) and 6 (train) are unmapped and 9 is a traffic light
+    assert md.evaluate(preds, gt, iou_thrs=[0.5], pred_classes="coco")["overall"]["n_pred_op"] == 0
+
+
 @pytest.mark.slow
 def test_cross_check_pycocotools(tmp_path):
     from pycocotools.coco import COCO

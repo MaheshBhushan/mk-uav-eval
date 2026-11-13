@@ -10,7 +10,8 @@
 <p align="center">
   <a href="https://github.com/MaheshBhushan/mk-uav-eval/actions/workflows/ci.yml">Latest report (CI artifact)</a> ·
   <a href="https://github.com/MaheshBhushan/mk-uav-eval/releases/tag/models-v1">Models</a> ·
-  <a href="https://www.kaggle.com/code/kodurimahesh/mk-uav-seg-finetune">Training kernel</a> ·
+  <a href="https://www.kaggle.com/code/kodurimahesh/mk-uav-seg-finetune">Seg training kernel</a> ·
+  <a href="https://www.kaggle.com/code/kodurimahesh/mk-uav-det-finetune">Det training kernel</a> ·
   <a href="#results">Results</a> ·
   <a href="#quickstart">Quickstart</a>
 </p>
@@ -29,15 +30,15 @@ onnxruntime OpenVINO provider with one shared pre- and post-processing path, so
 the forward pass is the only variable. Its own mAP and mIoU implementations are
 asserted equal to pycocotools and torchmetrics in the test suite.
 
-The harness is the deliverable. The models are pretrained COCO YOLOv8n and a
-small UNet trained from scratch, and their absolute scores are low on purpose.
+The harness is the deliverable. The models are pretrained COCO YOLOv8n, the same
+YOLOv8n fine-tuned on VisDrone train, and a small UNet trained from scratch.
 
 ## Quickstart
 
 ```bash
 git clone https://github.com/MaheshBhushan/mk-uav-eval.git && cd mk-uav-eval
 uv sync --extra cpu --extra dev                              # or --extra openvino instead of cpu
-gh release download models-v1 -p "*.onnx" -D models/         # 12 MB YOLOv8n + 31 MB UNet
+gh release download models-v1 -p "*.onnx" -D models/         # 12 MB YOLOv8n COCO + 12 MB fine-tuned + 31 MB UNet
 cp -r data/ci_subset/. data/                                 # 50 VisDrone + 20 ICG images, committed
 uv run pytest -q                                             # 15 tests, ~20 s
 uv run mkuav report --subset 50 --backend ort --out report.md --json metrics.json
@@ -188,6 +189,48 @@ pycocotools to 2.8e-17 on the CI subset (`tests/test_metrics_det.py`).
 
 ![detections](assets/detection.jpg)
 
+### Detection, YOLOv8n fine-tuned on VisDrone train vs COCO weights, VisDrone val v2, 548 images
+
+Same harness, same 548 val v2 images, same ignored regions, same six merged
+classes, onnxruntime CPU backend. The fine-tuned model predicts the 10 VisDrone
+classes; `--classes visdrone` maps them onto the six merged classes exactly as the
+ground truth is mapped, and its tricycle predictions are discarded.
+
+| Class | GT boxes | AP@0.5 COCO | AP@0.5 fine-tuned | AP@0.5:0.95 COCO | AP@0.5:0.95 fine-tuned | R@0.25 COCO | R@0.25 fine-tuned |
+|---|---|---|---|---|---|---|---|
+| car | 16039 | 0.396 | 0.732 | 0.231 | 0.476 | 0.299 | 0.707 |
+| person | 13969 | 0.148 | 0.312 | 0.057 | 0.120 | 0.076 | 0.278 |
+| bus | 251 | 0.106 | 0.324 | 0.080 | 0.235 | 0.179 | 0.343 |
+| truck | 750 | 0.037 | 0.221 | 0.026 | 0.148 | 0.049 | 0.223 |
+| motor | 4886 | 0.021 | 0.299 | 0.008 | 0.116 | 0.008 | 0.291 |
+| bicycle | 1287 | 0.010 | 0.053 | 0.009 | 0.023 | 0.002 | 0.060 |
+| **all** | 37182 | **0.120** | **0.323** | **0.069** | **0.186** | 0.161 | 0.456 |
+
+Overall precision at 0.25 is 0.769 for COCO weights and 0.765 fine-tuned, so the
+gain is recall at roughly constant precision.
+
+Training: 50 epochs from the COCO `yolov8n.pt` checkpoint, 640 px, batch 32, seed 0,
+Ultralytics 8.4.210, on one NVIDIA Tesla T4 in a Kaggle GPU kernel
+(`kodurimahesh/mk-uav-det-finetune`, 47 minutes of training). This was a Kaggle
+GPU, not Google Colab. The kernel trains on VisDrone2019-DET train only (5998
+images; every 20th sequence, 473 images, is held out for Ultralytics'
+in-training validation) and exports the final epoch's weights (`last.pt`, not a
+checkpoint selected on val) to ONNX opset 12. The val split scored here is never
+read by the kernel. Kernel source, training log, per-epoch `results.csv` and both
+evaluation JSONs are in `notebooks/det_finetune/` and `results/det_finetune/`;
+the ONNX file is the `yolov8n_visdrone.onnx` release asset.
+
+Reproduce:
+
+```bash
+uv run python scripts/fetch.py && uv run mkuav qa --version v1 --clean    # val v1 -> v2
+gh release download models-v1 -p "yolov8n*.onnx" -D models/
+uv run mkuav eval-det --version v2 --backend ort --model models/yolov8n.onnx --classes coco
+uv run mkuav eval-det --version v2 --backend ort --model models/yolov8n_visdrone.onnx --classes visdrone
+# retrain: needs Kaggle GPU quota; set your username in notebooks/det_finetune/kernel-metadata.json
+kaggle kernels push -p notebooks/det_finetune && kaggle kernels output kodurimahesh/mk-uav-det-finetune -p out/
+```
+
 ### Segmentation, from-scratch UNet, ICG Semantic Drone, 40 held-out images
 
 | Metric | Value |
@@ -237,6 +280,8 @@ data/ci_subset/            50 VisDrone + 20 ICG images committed for CI
 data/*.dvc                 DVC pointers for the full datasets (MinIO remote)
 models/                    ONNX files land here (release asset), class list, training log
 notebooks/seg_finetune.py  Kaggle script kernel that trains and exports the UNet
+notebooks/det_finetune/    Kaggle GPU kernel that fine-tunes YOLOv8n on VisDrone train
+results/det_finetune/      fine-tune training log and baseline vs fine-tuned eval JSON
 scripts/fetch.py           Kaggle download + layout for both datasets
 src/mkuav/
   cli.py                   argparse entry point, one subcommand per stage
@@ -252,7 +297,7 @@ tests/                     15 tests incl. pycocotools and torchmetrics cross-che
 
 ## Limitations
 
-- COCO weights, not fine-tuned on VisDrone. Absolute mAP is low by design.
+- The default detector is COCO YOLOv8n, not fine-tuned; the fine-tuned model is scored separately with `--classes visdrone` and is not yet the `mkuav report` default.
 - Tricycle and awning-tricycle GT are excluded, person/people and car/van are merged.
 - Ignored-region filtering is a centre-point approximation of the VisDrone protocol.
 - The segmentation model has no pretrained encoder and 360 training images; it exists to exercise the harness.
